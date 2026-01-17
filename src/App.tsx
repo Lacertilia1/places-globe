@@ -84,12 +84,16 @@ function App() {
       .globeImageUrl(
         'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg',
       )
+      .backgroundImageUrl(
+        'https://unpkg.com/three-globe/example/img/night-sky.png',
+      )
       .bumpImageUrl(
         'https://unpkg.com/three-globe/example/img/earth-topology.png',
       )
       .backgroundColor('#020617')
       .showAtmosphere(true)
       .atmosphereColor('#38bdf8')
+      .atmosphereAltitude(0.22)
       .pointRadius(0.9)
       .pointAltitude(0.05)
       .pointColor(() => '#ffcc00')
