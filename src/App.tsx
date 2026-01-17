@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Globe from 'globe.gl'
 import { PLACES, type Place } from './data/places'
 
+type GlobeInstance = InstanceType<typeof Globe>
+
 type GlobePoint = Place & {
   label: string
   isCurrent: boolean
@@ -19,7 +21,7 @@ function App() {
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null)
 
   const globeContainerRef = useRef<HTMLDivElement | null>(null)
-  const globeRef = useRef<ReturnType<typeof Globe> | null>(null)
+  const globeRef = useRef<GlobeInstance | null>(null)
   const initializedRef = useRef(false)
 
   useEffect(() => {
@@ -28,7 +30,7 @@ function App() {
     initializedRef.current = true
 
     const container = globeContainerRef.current
-    const globe = Globe()(container)
+    const globe = new Globe(container)
     globeRef.current = globe
 
     const controls = globe.controls()
@@ -54,10 +56,11 @@ function App() {
       .showAtmosphere(true)
       .atmosphereColor('#38bdf8')
       .atmosphereAltitude(0.22)
-      .pointColor((datum: GlobePoint) =>
-        datum.isSelected ? SELECTED_MARKER_COLOR : MARKER_COLOR,
-      )
-      .pointLabel((datum: GlobePoint) => datum.label)
+      .pointColor((datum: object) => {
+        const point = datum as GlobePoint
+        return point.isSelected ? SELECTED_MARKER_COLOR : MARKER_COLOR
+      })
+      .pointLabel((datum: object) => (datum as GlobePoint).label)
 
 
     const doResize = () => {
@@ -111,7 +114,7 @@ function App() {
   const currentPointRadius = 0.25
   const basePointAltitude = 0.1
   const currentPointAltitude = 0.12
-  const selectedPointRadius = 0.25;
+  const selectedPointRadius = 0.25
   const selectedPointAltitude = 0.1
   const defaultCameraAltitude = 1.4
   const selectedCameraAltitude = 0.6
@@ -121,20 +124,22 @@ function App() {
   useEffect(() => {
     if (!globeRef.current) return
     globeRef.current
-      .pointRadius((datum: GlobePoint) =>
-        datum.isSelected
+      .pointRadius((datum: object) => {
+        const point = datum as GlobePoint
+        return point.isSelected
           ? selectedPointRadius
-          : datum.isCurrent
+          : point.isCurrent
             ? currentPointRadius
-            : basePointRadius,
-      )
-      .pointAltitude((datum: GlobePoint) =>
-        datum.isSelected
+            : basePointRadius
+      })
+      .pointAltitude((datum: object) => {
+        const point = datum as GlobePoint
+        return point.isSelected
           ? selectedPointAltitude
-          : datum.isCurrent
+          : point.isCurrent
             ? currentPointAltitude
-            : basePointAltitude,
-      )
+            : basePointAltitude
+      })
   }, [
     basePointRadius,
     currentPointRadius,
@@ -164,9 +169,10 @@ function App() {
   useEffect(() => {
     if (!globeRef.current) return
     globeRef.current
-      .pointColor((datum: GlobePoint) =>
-        datum.isSelected ? SELECTED_MARKER_COLOR : MARKER_COLOR,
-      )
+      .pointColor((datum: object) => {
+        const point = datum as GlobePoint
+        return point.isSelected ? SELECTED_MARKER_COLOR : MARKER_COLOR
+      })
       .pointsData(pointsData)
   }, [pointsData])
 
@@ -175,11 +181,12 @@ function App() {
     if (!globe) return
     if (typeof globe.ringsData !== 'function') return
     globe
-      .ringLat((datum: GlobePoint) => datum.lat)
-      .ringLng((datum: GlobePoint) => datum.lng)
-      .ringColor((datum: GlobePoint) =>
-        datum.isSelected ? SELECTED_MARKER_COLOR : MARKER_COLOR,
-      )
+      .ringLat((datum: object) => (datum as GlobePoint).lat)
+      .ringLng((datum: object) => (datum as GlobePoint).lng)
+      .ringColor((datum: object) => {
+        const point = datum as GlobePoint
+        return point.isSelected ? SELECTED_MARKER_COLOR : MARKER_COLOR
+      })
       .ringMaxRadius(() => RING_MAX_RADIUS)
       .ringPropagationSpeed(() => RING_PROPAGATION_SPEED)
       .ringRepeatPeriod(() => RING_REPEAT_PERIOD)
@@ -297,7 +304,7 @@ function App() {
               margin: 0,
             }}
           >
-            Мой маршрут
+            Хронология
           </p>
           <h1 style={{ margin: '8px 0 6px', fontSize: '28px' }}>
             Мой маршрут
@@ -353,7 +360,7 @@ function App() {
               marginBottom: '10px',
             }}
           >
-            <h2 style={{ margin: 0, fontSize: '18px' }}>Хронология</h2>
+            <h2 style={{ margin: 0, fontSize: '18px' }}>Маршрут</h2>
             <span
               style={{
                 fontSize: '12px',
