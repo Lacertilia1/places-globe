@@ -6,15 +6,13 @@ type GlobePoint = Place & {
   label: string
   isCurrent: boolean
   isSelected: boolean
-  color: string
 }
 
-const BASE_POINT_COLOR = '#38bdf8'
-const CURRENT_POINT_COLOR = '#22c55e'
-const PULSE_MODE: 'all' | 'current' | 'selected' = 'selected'
-const RING_MAX_RADIUS = 1.2
+const MARKER_COLOR = '#ffcc00'
+const SELECTED_MARKER_COLOR = '#38bdf8'
+const RING_MAX_RADIUS = 1
 const RING_PROPAGATION_SPEED = 1
-const RING_REPEAT_PERIOD = 1000
+const RING_REPEAT_PERIOD = 900
 
 function App() {
   const [globeReady, setGlobeReady] = useState(false)
@@ -56,7 +54,9 @@ function App() {
       .showAtmosphere(true)
       .atmosphereColor('#38bdf8')
       .atmosphereAltitude(0.22)
-      .pointColor((datum: GlobePoint) => datum.color)
+      .pointColor((datum: GlobePoint) =>
+        datum.isSelected ? SELECTED_MARKER_COLOR : MARKER_COLOR,
+      )
       .pointLabel((datum: GlobePoint) => datum.label)
 
 
@@ -79,6 +79,12 @@ function App() {
     observer.observe(container)
     requestAnimationFrame(() => {
       doResize()
+      const globeNow = globeRef.current
+      if (!globeNow) return
+      globeNow.pointsData(pointsData)
+      if (typeof globeNow.ringsData === 'function') {
+        globeNow.ringsData(ringsData)
+      }
     })
 
     return () => {
@@ -101,14 +107,14 @@ function App() {
     () => places.find((place) => place.id === selectedPlaceId) ?? null,
     [places, selectedPlaceId],
   )
-  const basePointRadius = 0.06
-  const currentPointRadius = 0.06
-  const basePointAltitude = 0.06
-  const currentPointAltitude = 0.06
-  const selectedPointRadius = 0.1
-  const selectedPointAltitude = 0.12
+  const basePointRadius = 0.25
+  const currentPointRadius = 0.25
+  const basePointAltitude = 0.1
+  const currentPointAltitude = 0.12
+  const selectedPointRadius = 0.25;
+  const selectedPointAltitude = 0.1
   const defaultCameraAltitude = 1.4
-  const selectedCameraAltitude = 0.4
+  const selectedCameraAltitude = 0.6
   const cameraDuration = 1100
   const lastCameraTargetRef = useRef<string | null>(null)
 
@@ -146,7 +152,6 @@ function App() {
         return {
           ...place,
           label: `${place.title} — ${place.date}`,
-          color: isCurrent ? CURRENT_POINT_COLOR : BASE_POINT_COLOR,
           isCurrent,
           isSelected,
         }
@@ -154,19 +159,15 @@ function App() {
     [places, currentPlace, selectedPlaceId],
   )
 
-  const ringsData = useMemo(() => {
-    if (PULSE_MODE === 'all') return pointsData
-    if (PULSE_MODE === 'selected') {
-      const selected = pointsData.find((point) => point.isSelected)
-      return selected ? [selected] : []
-    }
-    const current = pointsData.find((point) => point.isCurrent)
-    return current ? [current] : []
-  }, [pointsData])
+  const ringsData = useMemo(() => pointsData, [pointsData])
 
   useEffect(() => {
     if (!globeRef.current) return
-    globeRef.current.pointsData(pointsData)
+    globeRef.current
+      .pointColor((datum: GlobePoint) =>
+        datum.isSelected ? SELECTED_MARKER_COLOR : MARKER_COLOR,
+      )
+      .pointsData(pointsData)
   }, [pointsData])
 
   useEffect(() => {
@@ -176,10 +177,10 @@ function App() {
     globe
       .ringLat((datum: GlobePoint) => datum.lat)
       .ringLng((datum: GlobePoint) => datum.lng)
-      .ringColor((datum: GlobePoint) => datum.color)
-      .ringMaxRadius((datum: GlobePoint) =>
-        datum.isSelected ? RING_MAX_RADIUS * 1.35 : RING_MAX_RADIUS,
+      .ringColor((datum: GlobePoint) =>
+        datum.isSelected ? SELECTED_MARKER_COLOR : MARKER_COLOR,
       )
+      .ringMaxRadius(() => RING_MAX_RADIUS)
       .ringPropagationSpeed(() => RING_PROPAGATION_SPEED)
       .ringRepeatPeriod(() => RING_REPEAT_PERIOD)
     globe.ringsData(ringsData)
