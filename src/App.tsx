@@ -1,75 +1,22 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Globe from 'globe.gl'
+import { PLACES, type Place } from './data/places'
 
-type Place = {
-  id: string
-  title: string
-  date: string
-  lat: number
-  lng: number
-}
+type GlobePoint = Place & { label: string; isCurrent: boolean; color: string }
 
-type GlobePoint = Place & { label: string }
-
-const STORAGE_KEY = 'places_globe_v1'
-
-const parsePlaces = (raw: string | null): Place[] => {
-  if (!raw) return []
-  try {
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return []
-    return parsed
-      .map((item) => ({
-        id: String(item?.id ?? ''),
-        title: String(item?.title ?? ''),
-        date: String(item?.date ?? ''),
-        lat: Number(item?.lat),
-        lng: Number(item?.lng),
-      }))
-      .filter(
-        (item) =>
-          item.id &&
-          item.title &&
-          item.date &&
-          Number.isFinite(item.lat) &&
-          Number.isFinite(item.lng),
-      )
-  } catch {
-    return []
-  }
-}
+const BASE_POINT_COLOR = '#38bdf8'
+const CURRENT_POINT_COLOR = '#22c55e'
+const PULSE_MODE: 'all' | 'current' = 'current'
+const RING_MAX_RADIUS = 3.6
+const RING_PROPAGATION_SPEED = 1.6
+const RING_REPEAT_PERIOD = 1800
 
 function App() {
-  const [places, setPlaces] = useState<Place[]>(() => {
-    try {
-      return parsePlaces(localStorage.getItem(STORAGE_KEY))
-    } catch {
-      return []
-    }
-  })
-  const [title, setTitle] = useState('')
-  const [date, setDate] = useState(() => {
-    const today = new Date()
-    return today.toISOString().slice(0, 10)
-  })
-  const [lat, setLat] = useState('')
-  const [lng, setLng] = useState('')
-  const [addHover, setAddHover] = useState(false)
-  const [hoverDeleteId, setHoverDeleteId] = useState<string | null>(null)
-  const [focusedField, setFocusedField] = useState<string | null>(null)
   const [globeReady, setGlobeReady] = useState(false)
 
   const globeContainerRef = useRef<HTMLDivElement | null>(null)
   const globeRef = useRef<ReturnType<typeof Globe> | null>(null)
   const initializedRef = useRef(false)
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(places))
-    } catch {
-      // Ignore storage write failures (private mode, quotas, etc.)
-    }
-  }, [places])
 
   useEffect(() => {
     if (!globeContainerRef.current || globeRef.current) return
@@ -94,9 +41,7 @@ function App() {
       .showAtmosphere(true)
       .atmosphereColor('#38bdf8')
       .atmosphereAltitude(0.22)
-      .pointRadius(0.9)
-      .pointAltitude(0.05)
-      .pointColor(() => '#ffcc00')
+      .pointColor((datum: GlobePoint) => datum.color)
       .pointLabel((datum: GlobePoint) => datum.label)
 
 
@@ -132,62 +77,70 @@ function App() {
     }
   }, [])
 
-  const pointsData = useMemo<GlobePoint[]>(
-    () =>
-      places.map((place) => ({
-        ...place,
-        label: `${place.title} — ${place.date}`,
-      })),
-    [places],
+  const places = useMemo(
+    () => [...PLACES].sort((a, b) => b.date.localeCompare(a.date)),
+    [],
   )
+  const currentPlace = places.length > 0 ? places[0] : null
+  const basePointRadius = 0.06
+  const currentPointRadius = 0.06
+  const basePointAltitude = 0.06
+  const currentPointAltitude = 0.06
+
+  useEffect(() => {
+    if (!globeRef.current) return
+    globeRef.current
+      .pointRadius((datum: GlobePoint) =>
+        datum.isCurrent ? currentPointRadius : basePointRadius,
+      )
+      .pointAltitude((datum: GlobePoint) =>
+        datum.isCurrent ? currentPointAltitude : basePointAltitude,
+      )
+  }, [
+    basePointRadius,
+    currentPointRadius,
+    basePointAltitude,
+    currentPointAltitude,
+  ])
+
+  const pointsData = useMemo(
+    () =>
+      places.map((place) => {
+        const isCurrent = currentPlace?.id === place.id
+        return {
+          ...place,
+          label: `${place.title} — ${place.date}`,
+          color: isCurrent ? CURRENT_POINT_COLOR : BASE_POINT_COLOR,
+          isCurrent,
+        }
+      }),
+    [places, currentPlace],
+  )
+
+  const ringsData = useMemo(() => {
+    if (PULSE_MODE === 'all') return pointsData
+    const current = pointsData.find((point) => point.isCurrent)
+    return current ? [current] : []
+  }, [pointsData])
 
   useEffect(() => {
     if (!globeRef.current) return
     globeRef.current.pointsData(pointsData)
   }, [pointsData])
 
-  const handleAdd = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const trimmedTitle = title.trim()
-    if (!trimmedTitle) {
-      alert('Please enter a title for the place.')
-      return
-    }
-    if (!date.trim()) {
-      alert('Please select a date.')
-      return
-    }
-
-    const latValue = Number(lat)
-    const lngValue = Number(lng)
-    if (!Number.isFinite(latValue) || !Number.isFinite(lngValue)) {
-      alert('Latitude and longitude must be numbers.')
-      return
-    }
-    if (latValue < -90 || latValue > 90) {
-      alert('Latitude must be between -90 and 90.')
-      return
-    }
-    if (lngValue < -180 || lngValue > 180) {
-      alert('Longitude must be between -180 and 180.')
-      return
-    }
-
-    const nextPlace: Place = {
-      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      title: trimmedTitle,
-      date: date.trim(),
-      lat: latValue,
-      lng: lngValue,
-    }
-
-    setPlaces((prev) => [nextPlace, ...prev])
-    setTitle('')
-  }
-
-  const handleDelete = (id: string) => {
-    setPlaces((prev) => prev.filter((place) => place.id !== id))
-  }
+  useEffect(() => {
+    const globe = globeRef.current
+    if (!globe) return
+    if (typeof globe.ringsData !== 'function') return
+    globe
+      .ringLat((datum: GlobePoint) => datum.lat)
+      .ringLng((datum: GlobePoint) => datum.lng)
+      .ringColor((datum: GlobePoint) => datum.color)
+      .ringMaxRadius(() => RING_MAX_RADIUS)
+      .ringPropagationSpeed(() => RING_PROPAGATION_SPEED)
+      .ringRepeatPeriod(() => RING_REPEAT_PERIOD)
+    globe.ringsData(ringsData)
+  }, [ringsData])
 
   const panelStyle: React.CSSProperties = {
     width: '400px',
@@ -197,27 +150,10 @@ function App() {
     color: '#e2e8f0',
     display: 'flex',
     flexDirection: 'column',
-    padding: '28px 30px 24px 26px',
+    padding: '24px 20px',
     boxShadow: '12px 0 30px rgba(15, 23, 42, 0.55)',
     boxSizing: 'border-box',
   }
-
-  const inputBaseStyle: React.CSSProperties = {
-    width: '100%',
-    height: '40px',
-    borderRadius: '10px',
-    border: '1px solid rgba(148, 163, 184, 0.25)',
-    background: 'rgba(15, 23, 42, 0.6)',
-    color: '#e2e8f0',
-    padding: '0 12px',
-    boxSizing: 'border-box',
-    outline: '2px solid transparent',
-    outlineOffset: '2px',
-    transition: 'border 0.15s ease, outline 0.15s ease',
-  }
-
-  const focusOutline = (field: string) =>
-    focusedField === field ? '2px solid rgba(56, 189, 248, 0.7)' : undefined
 
   return (
     <div
@@ -244,6 +180,25 @@ function App() {
           body {
             overflow: hidden;
           }
+          .places-scroll {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
+          }
+          .places-scroll::-webkit-scrollbar {
+            width: 8px;
+          }
+          .places-scroll::-webkit-scrollbar-track {
+            background: transparent;
+          }
+          .places-scroll::-webkit-scrollbar-thumb {
+            background-color: rgba(148, 163, 184, 0.4);
+            border-radius: 999px;
+            border: 2px solid transparent;
+            background-clip: content-box;
+          }
+          .places-scroll::-webkit-scrollbar-thumb:hover {
+            background-color: rgba(148, 163, 184, 0.6);
+          }
         `}
       </style>
       <aside style={panelStyle}>
@@ -257,10 +212,10 @@ function App() {
               margin: 0,
             }}
           >
-            My places on the globe
+            Мой маршрут
           </p>
           <h1 style={{ margin: '8px 0 6px', fontSize: '28px' }}>
-            Places Logbook
+            Мой маршрут
           </h1>
           <p
             style={{
@@ -269,135 +224,20 @@ function App() {
               color: 'rgba(226, 232, 240, 0.7)',
             }}
           >
-            Save locations and see them on the globe.
+            Где я жил и куда переезжал. Последняя точка — где я сейчас.
           </p>
         </div>
 
-        <form onSubmit={handleAdd} style={{ display: 'grid', gap: '12px' }}>
-          <label style={{ fontSize: '12px', color: 'rgba(226,232,240,0.7)' }}>
-            Title
-            <input
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              onFocus={() => setFocusedField('title')}
-              onBlur={() =>
-                setFocusedField((current) =>
-                  current === 'title' ? null : current,
-                )
-              }
-              style={{
-                ...inputBaseStyle,
-                marginTop: '6px',
-                outline: focusOutline('title'),
-              }}
-              placeholder="Lisbon, Portugal"
-            />
-          </label>
-          <label style={{ fontSize: '12px', color: 'rgba(226,232,240,0.7)' }}>
-            Date
-            <input
-              type="date"
-              value={date}
-              onChange={(event) => setDate(event.target.value)}
-              onFocus={() => setFocusedField('date')}
-              onBlur={() =>
-                setFocusedField((current) =>
-                  current === 'date' ? null : current,
-                )
-              }
-              style={{
-                ...inputBaseStyle,
-                marginTop: '6px',
-                outline: focusOutline('date'),
-              }}
-            />
-          </label>
-          <div
-            style={{
-              display: 'grid',
-              gap: '12px',
-              gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
-            }}
-          >
-            <label
-              style={{
-                fontSize: '12px',
-                color: 'rgba(226,232,240,0.7)',
-                display: 'block',
-              }}
-            >
-              Latitude
-              <input
-                value={lat}
-                onChange={(event) => setLat(event.target.value)}
-                onFocus={() => setFocusedField('lat')}
-                onBlur={() =>
-                  setFocusedField((current) =>
-                    current === 'lat' ? null : current,
-                  )
-                }
-                style={{
-                  ...inputBaseStyle,
-                  marginTop: '6px',
-                  outline: focusOutline('lat'),
-                }}
-                placeholder="38.72"
-              />
-            </label>
-            <label
-              style={{
-                fontSize: '12px',
-                color: 'rgba(226,232,240,0.7)',
-                display: 'block',
-              }}
-            >
-              Longitude
-              <input
-                value={lng}
-                onChange={(event) => setLng(event.target.value)}
-                onFocus={() => setFocusedField('lng')}
-                onBlur={() =>
-                  setFocusedField((current) =>
-                    current === 'lng' ? null : current,
-                  )
-                }
-                style={{
-                  ...inputBaseStyle,
-                  marginTop: '6px',
-                  outline: focusOutline('lng'),
-                }}
-                placeholder="-9.14"
-              />
-            </label>
-          </div>
-          <button
-            type="submit"
-            onMouseEnter={() => setAddHover(true)}
-            onMouseLeave={() => setAddHover(false)}
-            style={{
-              height: '42px',
-              borderRadius: '12px',
-              border: '1px solid rgba(56, 189, 248, 0.5)',
-              background: addHover ? '#0ea5e9' : '#0284c7',
-              color: '#0b1120',
-              fontWeight: 600,
-              letterSpacing: '0.02em',
-              cursor: 'pointer',
-              transition: 'background 0.15s ease, transform 0.1s ease',
-              transform: addHover ? 'translateY(-1px)' : 'translateY(0)',
-            }}
-          >
-            Add place
-          </button>
-        </form>
-
         <div
+          className="places-scroll"
           style={{
             marginTop: '20px',
             paddingTop: '16px',
             borderTop: '1px solid rgba(148, 163, 184, 0.15)',
             flex: 1,
             overflowY: 'auto',
+            paddingRight: '12px',
+            position: 'relative',
           }}
         >
           <div
@@ -408,14 +248,14 @@ function App() {
               marginBottom: '10px',
             }}
           >
-            <h2 style={{ margin: 0, fontSize: '18px' }}>Places</h2>
+            <h2 style={{ margin: 0, fontSize: '18px' }}>Хронология</h2>
             <span
               style={{
                 fontSize: '12px',
                 color: 'rgba(226, 232, 240, 0.65)',
               }}
             >
-              {places.length} saved
+              {places.length} мест
             </span>
           </div>
 
@@ -429,18 +269,24 @@ function App() {
                 fontSize: '14px',
               }}
             >
-              Nothing yet. Add your first place.
+              Пока пусто.
             </div>
           ) : (
             <div style={{ display: 'grid', gap: '12px' }}>
-              {places.map((place) => (
+              {places.map((place) => {
+                const isCurrent = currentPlace?.id === place.id
+                return (
                 <div
                   key={place.id}
                   style={{
                     padding: '12px 14px',
                     borderRadius: '14px',
-                    border: '1px solid rgba(148, 163, 184, 0.2)',
-                    background: 'rgba(15, 23, 42, 0.75)',
+                    border: isCurrent
+                      ? '1px solid rgba(52, 211, 153, 0.6)'
+                      : '1px solid rgba(148, 163, 184, 0.2)',
+                    background: isCurrent
+                      ? 'rgba(52, 211, 153, 0.12)'
+                      : 'rgba(15, 23, 42, 0.75)',
                     boxShadow: '0 10px 20px rgba(2, 6, 23, 0.35)',
                     display: 'flex',
                     justifyContent: 'space-between',
@@ -450,6 +296,23 @@ function App() {
                 >
                   <div>
                     <div style={{ fontWeight: 600 }}>{place.title}</div>
+                    {isCurrent && (
+                      <span
+                        style={{
+                          display: 'inline-block',
+                          marginTop: '6px',
+                          padding: '2px 8px',
+                          borderRadius: '999px',
+                          background: 'rgba(52, 211, 153, 0.2)',
+                          color: '#d1fae5',
+                          fontSize: '11px',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.08em',
+                        }}
+                      >
+                        Сейчас
+                      </span>
+                    )}
                     <div
                       style={{
                         fontSize: '12px',
@@ -469,32 +332,25 @@ function App() {
                       {place.lat.toFixed(4)}, {place.lng.toFixed(4)}
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onMouseEnter={() => setHoverDeleteId(place.id)}
-                    onMouseLeave={() => setHoverDeleteId(null)}
-                    onClick={() => handleDelete(place.id)}
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      color:
-                        hoverDeleteId === place.id
-                          ? '#f97316'
-                          : 'rgba(248, 250, 252, 0.7)',
-                      fontSize: '12px',
-                      cursor: 'pointer',
-                      padding: 0,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.08em',
-                    }}
-                  >
-                    Remove
-                  </button>
                 </div>
-              ))}
+                )
+              })}
             </div>
           )}
+          <div
+            style={{
+              position: 'sticky',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: '28px',
+              pointerEvents: 'none',
+              background:
+                'linear-gradient(180deg, rgba(15, 23, 42, 0) 0%, rgba(15, 23, 42, 0.95) 100%)',
+            }}
+          />
         </div>
+
       </aside>
 
       <section
