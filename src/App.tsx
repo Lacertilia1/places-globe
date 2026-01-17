@@ -2,17 +2,23 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Globe from 'globe.gl'
 import { PLACES, type Place } from './data/places'
 
-type GlobePoint = Place & { label: string; isCurrent: boolean; color: string }
+type GlobePoint = Place & {
+  label: string
+  isCurrent: boolean
+  isSelected: boolean
+  color: string
+}
 
 const BASE_POINT_COLOR = '#38bdf8'
 const CURRENT_POINT_COLOR = '#22c55e'
-const PULSE_MODE: 'all' | 'current' = 'current'
-const RING_MAX_RADIUS = 3.6
-const RING_PROPAGATION_SPEED = 1.6
-const RING_REPEAT_PERIOD = 1800
+const PULSE_MODE: 'all' | 'current' | 'selected' = 'selected'
+const RING_MAX_RADIUS = 1.2
+const RING_PROPAGATION_SPEED = 1
+const RING_REPEAT_PERIOD = 1000
 
 function App() {
   const [globeReady, setGlobeReady] = useState(false)
+  const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null)
 
   const globeContainerRef = useRef<HTMLDivElement | null>(null)
   const globeRef = useRef<ReturnType<typeof Globe> | null>(null)
@@ -26,6 +32,15 @@ function App() {
     const container = globeContainerRef.current
     const globe = Globe()(container)
     globeRef.current = globe
+
+    const controls = globe.controls()
+    controls.enableZoom = true
+    controls.zoomSpeed = 1.1
+    controls.minDistance = 140
+    controls.maxDistance = 1200
+    controls.enablePan = false
+    controls.enableDamping = true
+    controls.dampingFactor = 0.1
 
     globe
       .globeImageUrl(
@@ -82,43 +97,69 @@ function App() {
     [],
   )
   const currentPlace = places.length > 0 ? places[0] : null
+  const selectedPlace = useMemo(
+    () => places.find((place) => place.id === selectedPlaceId) ?? null,
+    [places, selectedPlaceId],
+  )
   const basePointRadius = 0.06
   const currentPointRadius = 0.06
   const basePointAltitude = 0.06
   const currentPointAltitude = 0.06
+  const selectedPointRadius = 0.1
+  const selectedPointAltitude = 0.12
+  const defaultCameraAltitude = 1.4
+  const selectedCameraAltitude = 0.4
+  const cameraDuration = 1100
+  const lastCameraTargetRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (!globeRef.current) return
     globeRef.current
       .pointRadius((datum: GlobePoint) =>
-        datum.isCurrent ? currentPointRadius : basePointRadius,
+        datum.isSelected
+          ? selectedPointRadius
+          : datum.isCurrent
+            ? currentPointRadius
+            : basePointRadius,
       )
       .pointAltitude((datum: GlobePoint) =>
-        datum.isCurrent ? currentPointAltitude : basePointAltitude,
+        datum.isSelected
+          ? selectedPointAltitude
+          : datum.isCurrent
+            ? currentPointAltitude
+            : basePointAltitude,
       )
   }, [
     basePointRadius,
     currentPointRadius,
     basePointAltitude,
     currentPointAltitude,
+    selectedPointRadius,
+    selectedPointAltitude,
   ])
 
   const pointsData = useMemo(
     () =>
       places.map((place) => {
         const isCurrent = currentPlace?.id === place.id
+        const isSelected = selectedPlaceId === place.id
         return {
           ...place,
           label: `${place.title} — ${place.date}`,
           color: isCurrent ? CURRENT_POINT_COLOR : BASE_POINT_COLOR,
           isCurrent,
+          isSelected,
         }
       }),
-    [places, currentPlace],
+    [places, currentPlace, selectedPlaceId],
   )
 
   const ringsData = useMemo(() => {
     if (PULSE_MODE === 'all') return pointsData
+    if (PULSE_MODE === 'selected') {
+      const selected = pointsData.find((point) => point.isSelected)
+      return selected ? [selected] : []
+    }
     const current = pointsData.find((point) => point.isCurrent)
     return current ? [current] : []
   }, [pointsData])
@@ -136,11 +177,54 @@ function App() {
       .ringLat((datum: GlobePoint) => datum.lat)
       .ringLng((datum: GlobePoint) => datum.lng)
       .ringColor((datum: GlobePoint) => datum.color)
-      .ringMaxRadius(() => RING_MAX_RADIUS)
+      .ringMaxRadius((datum: GlobePoint) =>
+        datum.isSelected ? RING_MAX_RADIUS * 1.35 : RING_MAX_RADIUS,
+      )
       .ringPropagationSpeed(() => RING_PROPAGATION_SPEED)
       .ringRepeatPeriod(() => RING_REPEAT_PERIOD)
     globe.ringsData(ringsData)
   }, [ringsData])
+
+  useEffect(() => {
+    const globe = globeRef.current
+    if (!globe || !globeReady) return
+
+    if (selectedPlace) {
+      const targetKey = `selected:${selectedPlace.id}`
+      if (lastCameraTargetRef.current === targetKey) return
+      lastCameraTargetRef.current = targetKey
+      globe.pointOfView(
+        {
+          lat: selectedPlace.lat,
+          lng: selectedPlace.lng,
+          altitude: selectedCameraAltitude,
+        },
+        cameraDuration,
+      )
+      return
+    }
+
+    if (currentPlace) {
+      const targetKey = `current:${currentPlace.id}`
+      if (lastCameraTargetRef.current === targetKey) return
+      lastCameraTargetRef.current = targetKey
+      globe.pointOfView(
+        {
+          lat: currentPlace.lat,
+          lng: currentPlace.lng,
+          altitude: defaultCameraAltitude,
+        },
+        cameraDuration,
+      )
+    }
+  }, [
+    selectedPlace,
+    currentPlace,
+    defaultCameraAltitude,
+    selectedCameraAltitude,
+    cameraDuration,
+    globeReady,
+  ])
 
   const panelStyle: React.CSSProperties = {
     width: '400px',
@@ -226,6 +310,26 @@ function App() {
           >
             Где я жил и куда переезжал. Последняя точка — где я сейчас.
           </p>
+          {selectedPlaceId && (
+            <button
+              type="button"
+              onClick={() => setSelectedPlaceId(null)}
+              style={{
+                marginTop: '14px',
+                padding: '6px 10px',
+                borderRadius: '999px',
+                border: '1px solid rgba(148, 163, 184, 0.35)',
+                background: 'transparent',
+                color: 'rgba(226, 232, 240, 0.8)',
+                fontSize: '12px',
+                cursor: 'pointer',
+                textTransform: 'uppercase',
+                letterSpacing: '0.08em',
+              }}
+            >
+              Сбросить выбор
+            </button>
+          )}
         </div>
 
         <div
@@ -275,23 +379,30 @@ function App() {
             <div style={{ display: 'grid', gap: '12px' }}>
               {places.map((place) => {
                 const isCurrent = currentPlace?.id === place.id
+                const isSelected = selectedPlaceId === place.id
                 return (
                 <div
                   key={place.id}
+                  onClick={() =>
+                    setSelectedPlaceId((value) =>
+                      value === place.id ? null : place.id,
+                    )
+                  }
                   style={{
                     padding: '12px 14px',
                     borderRadius: '14px',
-                    border: isCurrent
-                      ? '1px solid rgba(52, 211, 153, 0.6)'
+                    border: isSelected
+                      ? '1px solid rgba(56, 189, 248, 0.7)'
                       : '1px solid rgba(148, 163, 184, 0.2)',
-                    background: isCurrent
-                      ? 'rgba(52, 211, 153, 0.12)'
+                    background: isSelected
+                      ? 'rgba(56, 189, 248, 0.12)'
                       : 'rgba(15, 23, 42, 0.75)',
                     boxShadow: '0 10px 20px rgba(2, 6, 23, 0.35)',
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'flex-start',
                     gap: '12px',
+                    cursor: 'pointer',
                   }}
                 >
                   <div>
