@@ -12,15 +12,17 @@ type GlobePoint = Place & {
 
 const MARKER_COLOR = "#ffcc00";
 const SELECTED_MARKER_COLOR = "#38bdf8";
-const RING_MAX_RADIUS = 1;
-const RING_PROPAGATION_SPEED = 1;
-const RING_REPEAT_PERIOD = 900;
+const RING_MAX_RADIUS = 0.6;
+const RING_PROPAGATION_SPEED = 0.8;
+const RING_REPEAT_PERIOD = 1600;
+const EARTH_TEXTURE_LOW =
+  "https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg";
+const EARTH_TEXTURE_HIGH =
+  "https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg";
 
 function App() {
   const [globeReady, setGlobeReady] = useState(false);
-  const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(
-    "kotelniki-2023-08-01",
-  );
+  const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   const [countries, setCountries] = useState<any[]>([]);
 
   const globeContainerRef = useRef<HTMLDivElement | null>(null);
@@ -40,21 +42,17 @@ function App() {
     controls.enableZoom = true;
     controls.zoomSpeed = 1.1;
     controls.minDistance = 140;
-    controls.maxDistance = 1200;
+    controls.maxDistance = 900;
     controls.enablePan = false;
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.1;
+    controls.enableDamping = false;
+
+    if (typeof globe.renderer === "function") {
+      globe.renderer().setPixelRatio(1);
+    }
 
     globe
-      .globeImageUrl(
-        "https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg",
-      )
-      .backgroundImageUrl(
-        "https://unpkg.com/three-globe/example/img/night-sky.png",
-      )
-      .bumpImageUrl(
-        "https://unpkg.com/three-globe/example/img/earth-topology.png",
-      )
+      .globeImageUrl(EARTH_TEXTURE_LOW)
+      .backgroundImageUrl("/textures/stars.webp")
       .backgroundColor("#020617")
       .showAtmosphere(true)
       .atmosphereColor("#38bdf8")
@@ -64,6 +62,15 @@ function App() {
         return point.isSelected ? SELECTED_MARKER_COLOR : MARKER_COLOR;
       })
       .pointLabel((datum: object) => (datum as GlobePoint).label);
+
+    const highResImage = new Image();
+    highResImage.crossOrigin = "anonymous";
+    highResImage.src = EARTH_TEXTURE_HIGH;
+    highResImage.onload = () => {
+      if (globeRef.current) {
+        globeRef.current.globeImageUrl(EARTH_TEXTURE_HIGH);
+      }
+    };
 
     const doResize = () => {
       const container = globeContainerRef.current;
@@ -125,7 +132,7 @@ function App() {
   const currentPointAltitude = 0.12;
   const selectedPointRadius = 0.25;
   const selectedPointAltitude = 0.1;
-  const defaultCameraAltitude = 1.4;
+  const defaultCameraAltitude = 1.5;
   const selectedCameraAltitude = 0.6;
   const cameraDuration = 1100;
   const lastCameraTargetRef = useRef<string | null>(null);
