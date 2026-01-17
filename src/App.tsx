@@ -18,7 +18,10 @@ const RING_REPEAT_PERIOD = 900
 
 function App() {
   const [globeReady, setGlobeReady] = useState(false)
-  const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null)
+  const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(
+    'kotelniki-2023-08-01',
+  )
+  const [countries, setCountries] = useState<any[]>([])
 
   const globeContainerRef = useRef<HTMLDivElement | null>(null)
   const globeRef = useRef<GlobeInstance | null>(null)
@@ -99,6 +102,13 @@ function App() {
       initializedRef.current = false
       setGlobeReady(false)
     }
+  }, [])
+
+  useEffect(() => {
+    fetch('/geo/countries.geojson')
+      .then((response) => response.json())
+      .then((data) => setCountries(data?.features ?? []))
+      .catch(() => setCountries([]))
   }, [])
 
   const places = useMemo(
@@ -192,6 +202,18 @@ function App() {
       .ringRepeatPeriod(() => RING_REPEAT_PERIOD)
     globe.ringsData(ringsData)
   }, [ringsData])
+
+  useEffect(() => {
+    const globe = globeRef.current
+    if (!globe) return
+    globe
+      .polygonsData(countries)
+      .polygonCapColor(() => 'rgba(0,0,0,0)')
+      .polygonSideColor(() => 'rgba(0,0,0,0)')
+      .polygonStrokeColor(() => 'rgba(255,255,255,0.45)')
+      .polygonAltitude(0.0015)
+      .polygonLabel((datum: any) => datum?.properties?.name ?? '')
+  }, [countries])
 
   useEffect(() => {
     const globe = globeRef.current
