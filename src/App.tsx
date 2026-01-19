@@ -19,6 +19,8 @@ const EARTH_TEXTURE_LOW =
   "https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg";
 const EARTH_TEXTURE_HIGH =
   "https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg";
+const AUTO_ROTATE_DISTANCE = 200;
+const AUTO_ROTATE_SPEED = 0.15;
 
 function App() {
   const [globeReady, setGlobeReady] = useState(false);
@@ -27,6 +29,7 @@ function App() {
 
   const globeContainerRef = useRef<HTMLDivElement | null>(null);
   const globeRef = useRef<GlobeInstance | null>(null);
+  const controlsRef = useRef<any>(null);
   const initializedRef = useRef(false);
 
   useEffect(() => {
@@ -45,6 +48,7 @@ function App() {
     controls.maxDistance = 900;
     controls.enablePan = false;
     controls.enableDamping = false;
+    controlsRef.current = controls;
 
     if (typeof globe.renderer === "function") {
       globe.renderer().setPixelRatio(1);
@@ -107,6 +111,27 @@ function App() {
       globeRef.current = null;
       initializedRef.current = false;
       setGlobeReady(false);
+    };
+  }, []);
+
+  useEffect(() => {
+    let frame = 0;
+    const updateAutoRotate = () => {
+      const controls = controlsRef.current;
+      if (controls) {
+        const distance =
+          typeof controls.getDistance === "function"
+            ? controls.getDistance()
+            : null;
+        const shouldRotate = distance != null && distance > AUTO_ROTATE_DISTANCE;
+        controls.autoRotate = shouldRotate;
+        controls.autoRotateSpeed = AUTO_ROTATE_SPEED;
+      }
+      frame = requestAnimationFrame(updateAutoRotate);
+    };
+    frame = requestAnimationFrame(updateAutoRotate);
+    return () => {
+      cancelAnimationFrame(frame);
     };
   }, []);
 
