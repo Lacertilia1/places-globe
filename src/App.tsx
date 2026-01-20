@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import * as THREE from "three";
 import Globe from "globe.gl";
 import { PLACES, type Place } from "./data/places";
 
@@ -21,6 +22,10 @@ const EARTH_TEXTURE_HIGH =
   "https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg";
 const AUTO_ROTATE_DISTANCE = 200;
 const AUTO_ROTATE_SPEED = 0.15;
+const MAX_ZOOM_DISTANCE = 520;
+const MOON_DISTANCE_MULTIPLIER = 60.3;
+const MOON_RADIUS_MULTIPLIER = 0.2724;
+const MOON_TEXTURE = "https://unpkg.com/three-globe/example/img/moon.jpg";
 
 function App() {
   const [globeReady, setGlobeReady] = useState(false);
@@ -32,6 +37,8 @@ function App() {
   const globeRef = useRef<GlobeInstance | null>(null);
   const controlsRef = useRef<any>(null);
   const initializedRef = useRef(false);
+  const moonRef = useRef<THREE.Mesh | null>(null);
+  const moonLabelRef = useRef<THREE.Sprite | null>(null);
 
   useEffect(() => {
     if (!globeContainerRef.current || globeRef.current) return;
@@ -46,7 +53,7 @@ function App() {
     controls.enableZoom = true;
     controls.zoomSpeed = 1.1;
     controls.minDistance = 140;
-    controls.maxDistance = 900;
+    controls.maxDistance = MAX_ZOOM_DISTANCE;
     controls.enablePan = false;
     controls.enableDamping = false;
     controlsRef.current = controls;
@@ -67,6 +74,58 @@ function App() {
         return point.isSelected ? SELECTED_MARKER_COLOR : MARKER_COLOR;
       })
       .pointLabel((datum: object) => (datum as GlobePoint).label);
+
+    const globeRadius = globe.getGlobeRadius();
+    const createLabelSprite = (text: string, scale: number) => {
+      const labelCanvas = document.createElement("canvas");
+      labelCanvas.width = 256;
+      labelCanvas.height = 128;
+      const labelContext = labelCanvas.getContext("2d");
+      if (labelContext) {
+        labelContext.clearRect(0, 0, labelCanvas.width, labelCanvas.height);
+        labelContext.font = "bold 48px Trebuchet MS, sans-serif";
+        labelContext.fillStyle = "#e2e8f0";
+        labelContext.textAlign = "center";
+        labelContext.textBaseline = "middle";
+        labelContext.fillText(
+          text,
+          labelCanvas.width / 2,
+          labelCanvas.height / 2,
+        );
+      }
+      const labelTexture = new THREE.CanvasTexture(labelCanvas);
+      const labelMaterial = new THREE.SpriteMaterial({
+        map: labelTexture,
+        transparent: true,
+        depthTest: false,
+      });
+      const labelSprite = new THREE.Sprite(labelMaterial);
+      labelSprite.scale.set(scale, scale * 0.5, 1);
+      return labelSprite;
+    };
+
+    const moonRadius = globeRadius * MOON_RADIUS_MULTIPLIER;
+    const moonDistance = globeRadius * MOON_DISTANCE_MULTIPLIER;
+    const moonGeometry = new THREE.SphereGeometry(moonRadius, 48, 48);
+    const moonMaterial = new THREE.MeshPhongMaterial({
+      color: "#cbd5f5",
+      shininess: 5,
+    });
+    const moon = new THREE.Mesh(moonGeometry, moonMaterial);
+    moon.position.set(moonDistance, 0, 0);
+    moonRef.current = moon;
+    globe.scene().add(moon);
+
+    const moonLabel = createLabelSprite("Луна", globeRadius * 6);
+    moonLabel.position.set(moonDistance, moonRadius * 3.2, 0);
+    moonLabelRef.current = moonLabel;
+    globe.scene().add(moonLabel);
+
+    const moonTexture = new THREE.TextureLoader().load(MOON_TEXTURE, () => {
+      if (!moonRef.current) return;
+      moonMaterial.map = moonTexture;
+      moonMaterial.needsUpdate = true;
+    });
 
     const highResImage = new Image();
     highResImage.crossOrigin = "anonymous";
@@ -109,6 +168,22 @@ function App() {
       if (globeContainerRef.current) {
         globeContainerRef.current.innerHTML = "";
       }
+      if (moonRef.current) {
+        globe.scene().remove(moonRef.current);
+        moonRef.current.geometry.dispose();
+        if (Array.isArray(moonRef.current.material)) {
+          moonRef.current.material.forEach((material) => material.dispose());
+        } else {
+          moonRef.current.material.dispose();
+        }
+        moonRef.current = null;
+      }
+      if (moonLabelRef.current) {
+        globe.scene().remove(moonLabelRef.current);
+        moonLabelRef.current.material.map?.dispose();
+        moonLabelRef.current.material.dispose();
+        moonLabelRef.current = null;
+      }
       globeRef.current = null;
       initializedRef.current = false;
       setGlobeReady(false);
@@ -127,6 +202,33 @@ function App() {
         const shouldRotate = distance != null && distance > AUTO_ROTATE_DISTANCE;
         controls.autoRotate = shouldRotate;
         controls.autoRotateSpeed = AUTO_ROTATE_SPEED;
+        const globe = globeRef.current;
+        const moonLabel = moonLabelRef.current;
+        const moon = moonRef.current;
+        if (globe && moonLabel && moon) {
+          const camera = globe.camera?.();
+          if (camera) {
+            const cameraPosition = new THREE.Vector3();
+            const moonPosition = new THREE.Vector3();
+            camera.getWorldPosition(cameraPosition);
+            moon.getWorldPosition(moonPosition);
+            const toMoon = moonPosition.clone().sub(cameraPosition);
+            const a = toMoon.dot(toMoon);
+            const b = 2 * cameraPosition.dot(toMoon);
+            const radius = globe.getGlobeRadius();
+            const c = cameraPosition.dot(cameraPosition) - radius * radius;
+            const disc = b * b - 4 * a * c;
+            let occluded = false;
+            if (disc > 0) {
+              const sqrt = Math.sqrt(disc);
+              const t1 = (-b - sqrt) / (2 * a);
+              const t2 = (-b + sqrt) / (2 * a);
+              occluded =
+                (t1 >= 0 && t1 <= 1) || (t2 >= 0 && t2 <= 1);
+            }
+            moonLabel.visible = !occluded;
+          }
+        }
       }
       frame = requestAnimationFrame(updateAutoRotate);
     };
