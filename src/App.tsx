@@ -25,6 +25,7 @@ const AUTO_ROTATE_SPEED = 0.15;
 function App() {
   const [globeReady, setGlobeReady] = useState(false);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
+  const [hasScrolled, setHasScrolled] = useState(false);
   const [countries, setCountries] = useState<any[]>([]);
 
   const globeContainerRef = useRef<HTMLDivElement | null>(null);
@@ -392,9 +393,12 @@ function App() {
 
         <div
           className="places-scroll"
+          onScroll={(event) => {
+            const target = event.currentTarget;
+            setHasScrolled(target.scrollTop > 1);
+          }}
           style={{
             marginTop: "20px",
-            paddingTop: "16px",
             borderTop: "1px solid rgba(148, 163, 184, 0.15)",
             flex: 1,
             overflowY: "auto",
@@ -402,6 +406,21 @@ function App() {
             position: "relative",
           }}
         >
+          <div
+            style={{
+              position: "sticky",
+              top: 0,
+              left: 0,
+              right: 0,
+              height: "28px",
+              pointerEvents: "none",
+              opacity: hasScrolled ? 1 : 0,
+              transition: "opacity 0.2s ease",
+              background:
+                "linear-gradient(180deg, rgba(15, 23, 42, 0.95) 0%, rgba(15, 23, 42, 0) 100%)",
+              zIndex: 2,
+            }}
+          />
           <div
             style={{
               display: "flex",
