@@ -182,12 +182,6 @@ function GlobeScene({
     observer.observe(container);
     requestAnimationFrame(() => {
       doResize();
-      const globeNow = globeRef.current;
-      if (!globeNow) return;
-      globeNow.pointsData(pointsData);
-      if (typeof globeNow.ringsData === "function") {
-        globeNow.ringsData(ringsData);
-      }
     });
 
     return () => {
@@ -217,7 +211,7 @@ function GlobeScene({
       initializedRef.current = false;
       setGlobeReady(false);
     };
-  }, [globeReady, pointsData, ringsData]);
+  }, []);
 
   useEffect(() => {
     let frame = 0;

@@ -12,4 +12,4 @@ export const AUTO_ROTATE_SPEED = 0.15;
 export const MAX_ZOOM_DISTANCE = 520;
 export const MOON_DISTANCE_MULTIPLIER = 60.3;
 export const MOON_RADIUS_MULTIPLIER = 0.2724;
-export const MOON_TEXTURE = "https://unpkg.com/three-globe/example/img/moon.jpg";
+export const MOON_TEXTURE = "/textures/moon.png";
