@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "../styles/places-panel.css";
 import type { Place } from "../data/places";
 
@@ -16,6 +16,44 @@ function PlacesPanel({
   onSelectPlace,
 }: PlacesPanelProps) {
   const [hasScrolled, setHasScrolled] = useState(false);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const itemRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const scrollFrameRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!selectedPlaceId) return;
+    const container = scrollRef.current;
+    const item = itemRefs.current[selectedPlaceId];
+    if (!container || !item) return;
+    const containerRect = container.getBoundingClientRect();
+    const itemRect = item.getBoundingClientRect();
+    const offset = itemRect.top - containerRect.top;
+    const target =
+      container.scrollTop +
+      offset -
+      (container.clientHeight / 2 - itemRect.height / 2);
+    if (scrollFrameRef.current != null) {
+      cancelAnimationFrame(scrollFrameRef.current);
+    }
+    const startTop = container.scrollTop;
+    const delta = target - startTop;
+    const duration = 550;
+    const start = performance.now();
+    const easeInOut = (t: number) =>
+      t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    const animate = (time: number) => {
+      const elapsed = time - start;
+      const progress = Math.min(1, elapsed / duration);
+      const eased = easeInOut(progress);
+      container.scrollTop = startTop + delta * eased;
+      if (progress < 1) {
+        scrollFrameRef.current = requestAnimationFrame(animate);
+      } else {
+        scrollFrameRef.current = null;
+      }
+    };
+    scrollFrameRef.current = requestAnimationFrame(animate);
+  }, [selectedPlaceId]);
 
   return (
     <aside className="places-panel">
@@ -35,6 +73,7 @@ function PlacesPanel({
       </div>
 
       <div
+        ref={scrollRef}
         className="places-panel__scroll"
         onScroll={(event) => {
           const target = event.currentTarget;
@@ -64,6 +103,9 @@ function PlacesPanel({
                   onClick={() =>
                     onSelectPlace(selectedPlaceId === place.id ? null : place.id)
                   }
+                  ref={(element) => {
+                    itemRefs.current[place.id] = element;
+                  }}
                   className={`places-panel__item${
                     isSelected ? " places-panel__item--selected" : ""
                   }`}

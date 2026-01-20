@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import GlobeScene from "./components/GlobeScene";
 import PlacesPanel from "./components/PlacesPanel";
 import { PLACES } from "./data/places";
@@ -6,6 +6,18 @@ import "./styles/app.css";
 
 function App() {
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSelectedPlaceId((value) => (value ? null : value));
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
 
   const places = useMemo(
     () => [...PLACES].sort((a, b) => b.date.localeCompare(a.date)),
