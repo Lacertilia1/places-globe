@@ -58,16 +58,16 @@ function PlacesPanel({
   return (
     <aside className="places-panel">
       <div className="places-panel__header">
-        <p className="places-panel__kicker">Хронология</p>
-        <h1 className="places-panel__title">Мой маршрут</h1>
-        <p className="places-panel__subtitle">Где я жил и куда переезжал</p>
+        <p className="places-panel__kicker">Timeline</p>
+        <h1 className="places-panel__title">My Route</h1>
+        <p className="places-panel__subtitle">Where I lived and moved</p>
         {selectedPlaceId && (
           <button
             type="button"
             className="places-panel__reset"
             onClick={() => onSelectPlace(null)}
           >
-            Сбросить выбор
+            Clear selection
           </button>
         )}
       </div>
@@ -86,12 +86,12 @@ function PlacesPanel({
           }`}
         />
         <div className="places-panel__section-head">
-          <h2 className="places-panel__section-title">Маршрут</h2>
-          <span className="places-panel__count">{places.length} мест</span>
+          <h2 className="places-panel__section-title">Route</h2>
+          <span className="places-panel__count">{places.length} places</span>
         </div>
 
         {places.length === 0 ? (
-          <div className="places-panel__empty">Пока пусто.</div>
+          <div className="places-panel__empty">No places yet.</div>
         ) : (
           <div className="places-panel__grid">
             {places.map((place) => {
@@ -115,7 +115,7 @@ function PlacesPanel({
                       {place.title}
                     </div>
                     {isCurrent && (
-                      <span className="places-panel__badge">Сейчас</span>
+                      <span className="places-panel__badge">Current</span>
                     )}
                     <div className="places-panel__meta">{place.date}</div>
                     <div className="places-panel__coords">

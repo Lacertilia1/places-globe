@@ -143,7 +143,7 @@ function GlobeScene({
     moonRef.current = moon;
     globe.scene().add(moon);
 
-    const moonLabel = createLabelSprite("Луна", globeRadius * 6);
+    const moonLabel = createLabelSprite("Moon", globeRadius * 6);
     moonLabel.position.set(moonDistance, moonRadius * 3.2, 0);
     moonLabelRef.current = moonLabel;
     globe.scene().add(moonLabel);
@@ -389,7 +389,7 @@ function GlobeScene({
 
   return (
     <section className="globe-scene">
-      {!globeReady && <div className="globe-scene__loader">Loading globe…</div>}
+      {!globeReady && <div className="globe-scene__loader">Loading globe...</div>}
       <div ref={globeContainerRef} className="globe-scene__canvas" />
     </section>
   );
